@@ -19,7 +19,8 @@ pub const simplified_logic =
     builtin.zig_backend == .stage2_aarch64 or
     builtin.zig_backend == .stage2_arm or
     builtin.zig_backend == .stage2_sparc64 or
-    builtin.zig_backend == .stage2_spirv64;
+    builtin.zig_backend == .stage2_spirv64 or
+    builtin.zig_backend == .stage2_loongarch64;
 
 comptime {
     // No matter what, we import the root file, so that any export, test, comptime

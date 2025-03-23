@@ -606,7 +606,8 @@ pub fn defaultPanic(
         builtin.zig_backend == .stage2_x86 or
         (builtin.zig_backend == .stage2_x86_64 and (builtin.target.ofmt != .elf and builtin.target.ofmt != .macho)) or
         builtin.zig_backend == .stage2_sparc64 or
-        builtin.zig_backend == .stage2_spirv64)
+        builtin.zig_backend == .stage2_spirv64 or
+        builtin.zig_backend == .stage2_loongarch64)
     {
         @trap();
     }
