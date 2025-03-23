@@ -716,6 +716,7 @@ pub fn zigBackend(target: std.Target, use_llvm: bool) std.builtin.CompilerBacken
         .riscv64 => .stage2_riscv64,
         .sparc64 => .stage2_sparc64,
         .spirv64 => .stage2_spirv64,
+        .loongarch64 => .stage2_loongarch64,
         else => .other,
     };
 }

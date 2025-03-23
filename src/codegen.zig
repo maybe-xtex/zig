@@ -40,6 +40,7 @@ fn importBackend(comptime backend: std.builtin.CompilerBackend) type {
         .stage2_riscv64 => @import("arch/riscv64/CodeGen.zig"),
         .stage2_sparc64 => @import("arch/sparc64/CodeGen.zig"),
         .stage2_x86_64 => @import("arch/x86_64/CodeGen.zig"),
+        .stage2_loongarch64 => @import("arch/loongarch64/CodeGen.zig"),
         else => unreachable,
     };
 }
@@ -64,6 +65,7 @@ pub fn generateFunction(
         .stage2_riscv64,
         .stage2_sparc64,
         .stage2_x86_64,
+        .stage2_loongarch64,
         => |backend| {
             dev.check(devFeatureForBackend(backend));
             return importBackend(backend).generate(lf, pt, src_loc, func_index, air, liveness, code, debug_output);

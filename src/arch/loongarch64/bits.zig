@@ -198,3 +198,5 @@ pub const FrameIndex = enum(u32) {
         }
     }
 };
+
+pub const FrameAddr = struct { index: FrameIndex, off: i32 = 0 };
