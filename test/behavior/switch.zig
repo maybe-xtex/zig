@@ -43,7 +43,6 @@ fn testSwitchWithAllRanges(x: u32, y: u32) u32 {
 }
 
 test "switch arbitrary int size" {
-    if (builtin.zig_backend == .stage2_x86_64) return error.SkipZigTest; // TODO
     if (builtin.zig_backend == .stage2_aarch64) return error.SkipZigTest; // TODO
     if (builtin.zig_backend == .stage2_arm) return error.SkipZigTest; // TODO
     if (builtin.zig_backend == .stage2_sparc64) return error.SkipZigTest; // TODO
@@ -1056,4 +1055,13 @@ test "unlabeled break ignores switch" {
         comptime unreachable; // control flow never breaks from the switch
     };
     try expect(result == 123);
+}
+
+test "switch on a signed value smaller than the smallest prong value" {
+    var v: i32 = undefined;
+    v = -1;
+    switch (v) {
+        inline 0...10 => return error.TestFailed,
+        else => {},
+    }
 }

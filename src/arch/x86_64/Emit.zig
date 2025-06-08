@@ -97,12 +97,14 @@ pub fn emitMir(emit: *Emit) Error!void {
                             op_index -= 1;
                             const op = lowered_inst.encoding.data.ops[op_index];
                             if (op == .none) continue;
-                            const enc_length: u4 = @intCast(
-                                std.math.divCeil(u7, @intCast(op.immBitSize()), 8) catch unreachable,
-                            );
+                            const is_mem = op.isMemory();
+                            const enc_length: u4 = if (is_mem) switch (lowered_inst.ops[op_index].mem.sib.base) {
+                                .rip_inst => 4,
+                                else => unreachable,
+                            } else @intCast(std.math.divCeil(u7, @intCast(op.immBitSize()), 8) catch unreachable);
                             reloc_offset -= enc_length;
-                            if (op_index == lowered_relocs[0].op_index)
-                                break :reloc_offset_length .{ reloc_offset, enc_length };
+                            if (op_index == lowered_relocs[0].op_index) break :reloc_offset_length .{ reloc_offset, enc_length };
+                            std.debug.assert(!is_mem);
                         }
                     };
                     try relocs.append(emit.lower.allocator, .{
@@ -187,12 +189,12 @@ pub fn emitMir(emit: *Emit) Error!void {
                         .r_addend = lowered_relocs[0].off,
                     }, zo);
                 },
-                .linker_reloc => |sym_index| if (emit.lower.bin_file.cast(.elf)) |elf_file| {
+                .linker_reloc, .linker_pcrel => |sym_index| if (emit.lower.bin_file.cast(.elf)) |elf_file| {
                     const zo = elf_file.zigObjectPtr().?;
                     const atom = zo.symbol(emit.atom_index).atom(elf_file).?;
                     const sym = zo.symbol(sym_index);
                     if (emit.lower.pic) {
-                        const r_type: u32 = if (sym.flags.is_extern_ptr)
+                        const r_type: u32 = if (sym.flags.is_extern_ptr and lowered_relocs[0].target != .linker_pcrel)
                             @intFromEnum(std.elf.R_X86_64.GOTPCREL)
                         else
                             @intFromEnum(std.elf.R_X86_64.PC32);
@@ -216,7 +218,7 @@ pub fn emitMir(emit: *Emit) Error!void {
                     const zo = macho_file.getZigObject().?;
                     const atom = zo.symbols.items[emit.atom_index].getAtom(macho_file).?;
                     const sym = &zo.symbols.items[sym_index];
-                    const @"type": link.File.MachO.Relocation.Type = if (sym.flags.is_extern_ptr)
+                    const @"type": link.File.MachO.Relocation.Type = if (sym.flags.is_extern_ptr and lowered_relocs[0].target != .linker_pcrel)
                         .got_load
                     else if (sym.flags.tlv)
                         .tlv
@@ -376,9 +378,9 @@ pub fn emitMir(emit: *Emit) Error!void {
                                     };
                                     break :stack_value &loc_buf[0];
                                 } } },
-                                .pseudo_dbg_local_as => .{ mir_inst.data.as.air_inst, .{ .addr = .{
-                                    .sym = mir_inst.data.as.sym_index,
-                                } } },
+                                .pseudo_dbg_local_as => .{ mir_inst.data.as.air_inst, .{
+                                    .addr_reloc = mir_inst.data.as.sym_index,
+                                } },
                                 .pseudo_dbg_local_aso => loc: {
                                     const sym_off = emit.lower.mir.extraData(
                                         bits.SymbolOffset,
@@ -386,7 +388,7 @@ pub fn emitMir(emit: *Emit) Error!void {
                                     ).data;
                                     break :loc .{ mir_inst.data.ax.air_inst, .{ .plus = .{
                                         sym: {
-                                            loc_buf[0] = .{ .addr = .{ .sym = sym_off.sym_index } };
+                                            loc_buf[0] = .{ .addr_reloc = sym_off.sym_index };
                                             break :sym &loc_buf[0];
                                         },
                                         off: {
@@ -434,8 +436,9 @@ pub fn emitMir(emit: *Emit) Error!void {
                                             loc_buf[0] = switch (mem.base()) {
                                                 .none => .{ .constu = 0 },
                                                 .reg => |reg| .{ .breg = reg.dwarfNum() },
-                                                .frame, .table => unreachable,
-                                                .reloc => |sym_index| .{ .addr = .{ .sym = sym_index } },
+                                                .frame, .table, .rip_inst => unreachable,
+                                                .reloc => |sym_index| .{ .addr_reloc = sym_index },
+                                                .pcrel => unreachable,
                                             };
                                             break :base &loc_buf[0];
                                         },

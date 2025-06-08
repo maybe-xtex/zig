@@ -1164,7 +1164,6 @@ test "assignment to non-byte-aligned field in packed struct" {
 }
 
 test "packed struct field pointer aligned properly" {
-    if (builtin.zig_backend == .stage2_x86) return error.SkipZigTest; // TODO
     if (builtin.zig_backend == .stage2_aarch64) return error.SkipZigTest; // TODO
     if (builtin.zig_backend == .stage2_arm) return error.SkipZigTest; // TODO
     if (builtin.zig_backend == .stage2_sparc64) return error.SkipZigTest; // TODO
@@ -1308,6 +1307,17 @@ test "packed struct equality" {
     comptime try S.doTest(x, y);
 }
 
+test "packed struct equality ignores padding bits" {
+    if (builtin.zig_backend == .stage2_c) return error.SkipZigTest;
+    if (builtin.zig_backend == .stage2_spirv64) return error.SkipZigTest;
+
+    const S = packed struct { b: bool };
+    var s: S = undefined;
+    s.b = true;
+    try std.testing.expect(s != S{ .b = false });
+    try std.testing.expect(s == S{ .b = true });
+}
+
 test "packed struct with signed field" {
     var s: packed struct {
         a: i2,
@@ -1321,7 +1331,6 @@ test "packed struct with signed field" {
 test "assign packed struct initialized with RLS to packed struct literal field" {
     if (builtin.zig_backend == .stage2_llvm and builtin.cpu.arch.isWasm()) return error.SkipZigTest;
     if (builtin.zig_backend == .stage2_riscv64) return error.SkipZigTest;
-    if (builtin.zig_backend == .stage2_wasm) return error.SkipZigTest;
     if (builtin.zig_backend == .stage2_spirv64) return error.SkipZigTest;
 
     const Inner = packed struct { x: u17 };

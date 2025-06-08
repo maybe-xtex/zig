@@ -4,6 +4,7 @@ const expect = std.testing.expect;
 
 const Allocator = std.mem.Allocator;
 const ArrayList = std.ArrayList;
+const Mir = @import("Mir.zig");
 
 /// EFLAGS condition codes
 pub const Condition = enum(u5) {
@@ -359,11 +360,20 @@ pub const Register = enum(u8) {
 
     ah, ch, dh, bh,
 
-    ymm0, ymm1, ymm2,  ymm3,  ymm4,  ymm5,  ymm6,  ymm7,
-    ymm8, ymm9, ymm10, ymm11, ymm12, ymm13, ymm14, ymm15,
+    zmm0,  zmm1, zmm2,  zmm3,  zmm4,  zmm5,  zmm6,  zmm7,
+    zmm8,  zmm9, zmm10, zmm11, zmm12, zmm13, zmm14, zmm15,
+    zmm16, zmm17,zmm18, zmm19, zmm20, zmm21, zmm22, zmm23,
+    zmm24, zmm25,zmm26, zmm27, zmm28, zmm29, zmm30, zmm31,
 
-    xmm0, xmm1, xmm2,  xmm3,  xmm4,  xmm5,  xmm6,  xmm7,
-    xmm8, xmm9, xmm10, xmm11, xmm12, xmm13, xmm14, xmm15,
+    ymm0,  ymm1, ymm2,  ymm3,  ymm4,  ymm5,  ymm6,  ymm7,
+    ymm8,  ymm9, ymm10, ymm11, ymm12, ymm13, ymm14, ymm15,
+    ymm16, ymm17,ymm18, ymm19, ymm20, ymm21, ymm22, ymm23,
+    ymm24, ymm25,ymm26, ymm27, ymm28, ymm29, ymm30, ymm31,
+
+    xmm0,  xmm1, xmm2,  xmm3,  xmm4,  xmm5,  xmm6,  xmm7,
+    xmm8,  xmm9, xmm10, xmm11, xmm12, xmm13, xmm14, xmm15,
+    xmm16, xmm17,xmm18, xmm19, xmm20, xmm21, xmm22, xmm23,
+    xmm24, xmm25,xmm26, xmm27, xmm28, xmm29, xmm30, xmm31,
 
     mm0, mm1, mm2, mm3, mm4, mm5, mm6, mm7,
 
@@ -403,8 +413,9 @@ pub const Register = enum(u8) {
             @intFromEnum(Register.al)   ... @intFromEnum(Register.r15b)  => .general_purpose,
             @intFromEnum(Register.ah)   ... @intFromEnum(Register.bh)    => .gphi,
 
-            @intFromEnum(Register.ymm0) ... @intFromEnum(Register.ymm15) => .sse,
-            @intFromEnum(Register.xmm0) ... @intFromEnum(Register.xmm15) => .sse,
+            @intFromEnum(Register.zmm0) ... @intFromEnum(Register.zmm31) => .sse,
+            @intFromEnum(Register.ymm0) ... @intFromEnum(Register.ymm31) => .sse,
+            @intFromEnum(Register.xmm0) ... @intFromEnum(Register.xmm31) => .sse,
             @intFromEnum(Register.mm0)  ... @intFromEnum(Register.mm7)   => .mmx,
             @intFromEnum(Register.st0)  ... @intFromEnum(Register.st7)   => .x87,
 
@@ -418,6 +429,16 @@ pub const Register = enum(u8) {
         };
     }
 
+    pub inline fn isClass(reg: Register, rc: Class) bool {
+        switch (rc) {
+            else => return reg.class() == rc,
+            .gphi => {
+                const reg_id = reg.id();
+                return (reg_id >= comptime Register.ah.id()) and reg_id <= comptime Register.bh.id();
+            },
+        }
+    }
+
     pub fn id(reg: Register) u7 {
         const base = switch (@intFromEnum(reg)) {
             // zig fmt: off
@@ -427,13 +448,14 @@ pub const Register = enum(u8) {
             @intFromEnum(Register.al)   ... @intFromEnum(Register.r15b)  => @intFromEnum(Register.al),
             @intFromEnum(Register.ah)   ... @intFromEnum(Register.bh)    => @intFromEnum(Register.ah),
 
-            @intFromEnum(Register.ymm0) ... @intFromEnum(Register.ymm15) => @intFromEnum(Register.ymm0) - 16,
-            @intFromEnum(Register.xmm0) ... @intFromEnum(Register.xmm15) => @intFromEnum(Register.xmm0) - 16,
-            @intFromEnum(Register.mm0)  ... @intFromEnum(Register.mm7)   => @intFromEnum(Register.mm0) - 32,
-            @intFromEnum(Register.st0)  ... @intFromEnum(Register.st7)   => @intFromEnum(Register.st0) - 40,
-            @intFromEnum(Register.es)   ... @intFromEnum(Register.gs)    => @intFromEnum(Register.es) - 48,
-            @intFromEnum(Register.cr0)  ... @intFromEnum(Register.cr15)  => @intFromEnum(Register.cr0) - 54,
-            @intFromEnum(Register.dr0)  ... @intFromEnum(Register.dr15)  => @intFromEnum(Register.dr0) - 70,
+            @intFromEnum(Register.zmm0) ... @intFromEnum(Register.zmm31) => @intFromEnum(Register.zmm0) - 16,
+            @intFromEnum(Register.ymm0) ... @intFromEnum(Register.ymm31) => @intFromEnum(Register.ymm0) - 16,
+            @intFromEnum(Register.xmm0) ... @intFromEnum(Register.xmm31) => @intFromEnum(Register.xmm0) - 16,
+            @intFromEnum(Register.mm0)  ... @intFromEnum(Register.mm7)   => @intFromEnum(Register.mm0)  - 48,
+            @intFromEnum(Register.st0)  ... @intFromEnum(Register.st7)   => @intFromEnum(Register.st0)  - 56,
+            @intFromEnum(Register.es)   ... @intFromEnum(Register.gs)    => @intFromEnum(Register.es)   - 64,
+            @intFromEnum(Register.cr0)  ... @intFromEnum(Register.cr15)  => @intFromEnum(Register.cr0)  - 70,
+            @intFromEnum(Register.dr0)  ... @intFromEnum(Register.dr15)  => @intFromEnum(Register.dr0)  - 86,
 
             else => unreachable,
             // zig fmt: on
@@ -450,6 +472,7 @@ pub const Register = enum(u8) {
             @intFromEnum(Register.al)   ... @intFromEnum(Register.r15b)  => 8,
             @intFromEnum(Register.ah)   ... @intFromEnum(Register.bh)    => 8,
 
+            @intFromEnum(Register.zmm0) ... @intFromEnum(Register.zmm15) => 512,
             @intFromEnum(Register.ymm0) ... @intFromEnum(Register.ymm15) => 256,
             @intFromEnum(Register.xmm0) ... @intFromEnum(Register.xmm15) => 128,
             @intFromEnum(Register.mm0)  ... @intFromEnum(Register.mm7)   => 64,
@@ -473,8 +496,9 @@ pub const Register = enum(u8) {
             @intFromEnum(Register.r8w) ... @intFromEnum(Register.r15w)   => true,
             @intFromEnum(Register.r8b) ... @intFromEnum(Register.r15b)   => true,
 
-            @intFromEnum(Register.ymm8) ... @intFromEnum(Register.ymm15) => true,
-            @intFromEnum(Register.xmm8) ... @intFromEnum(Register.xmm15) => true,
+            @intFromEnum(Register.zmm8) ... @intFromEnum(Register.zmm31) => true,
+            @intFromEnum(Register.ymm8) ... @intFromEnum(Register.ymm31) => true,
+            @intFromEnum(Register.xmm8) ... @intFromEnum(Register.xmm31) => true,
 
             @intFromEnum(Register.cr8)  ... @intFromEnum(Register.cr15)  => true,
             @intFromEnum(Register.dr8)  ... @intFromEnum(Register.dr15)  => true,
@@ -484,7 +508,7 @@ pub const Register = enum(u8) {
         };
     }
 
-    pub fn enc(reg: Register) u4 {
+    pub fn enc(reg: Register) u5 {
         const base = switch (@intFromEnum(reg)) {
             // zig fmt: off
             @intFromEnum(Register.rax)  ... @intFromEnum(Register.r15)   => @intFromEnum(Register.rax),
@@ -509,19 +533,39 @@ pub const Register = enum(u8) {
         return @truncate(@intFromEnum(reg) - base);
     }
 
-    pub fn lowEnc(reg: Register) u3 {
-        return @truncate(reg.enc());
-    }
-
     pub fn toBitSize(reg: Register, bit_size: u64) Register {
         return switch (bit_size) {
             8 => reg.to8(),
             16 => reg.to16(),
             32 => reg.to32(),
             64 => reg.to64(),
+            80 => reg.to80(),
             128 => reg.to128(),
             256 => reg.to256(),
+            512 => reg.to512(),
             else => unreachable,
+        };
+    }
+
+    pub fn toSize(reg: Register, size: Memory.Size, target: *const std.Target) Register {
+        return switch (size) {
+            .none => unreachable,
+            .ptr => reg.toBitSize(target.ptrBitWidth()),
+            .gpr => switch (target.cpu.arch) {
+                else => unreachable,
+                .x86 => reg.to32(),
+                .x86_64 => reg.to64(),
+            },
+            .low_byte => reg.toLo8(),
+            .high_byte => reg.toHi8(),
+            .byte => reg.to8(),
+            .word => reg.to16(),
+            .dword => reg.to32(),
+            .qword => reg.to64(),
+            .tbyte => reg.to80(),
+            .xword => reg.to128(),
+            .yword => reg.to256(),
+            .zword => reg.to512(),
         };
     }
 
@@ -539,31 +583,69 @@ pub const Register = enum(u8) {
     }
 
     pub fn to64(reg: Register) Register {
-        return @enumFromInt(@intFromEnum(reg) - reg.gpBase() + @intFromEnum(Register.rax));
+        return switch (reg.class()) {
+            .general_purpose, .gphi => @enumFromInt(@intFromEnum(reg) - reg.gpBase() + @intFromEnum(Register.rax)),
+            .segment => unreachable,
+            .x87, .mmx, .cr, .dr => reg,
+            .sse => reg.to128(),
+            .ip => .rip,
+        };
     }
 
     pub fn to32(reg: Register) Register {
-        return @enumFromInt(@intFromEnum(reg) - reg.gpBase() + @intFromEnum(Register.eax));
+        return switch (reg.class()) {
+            .general_purpose, .gphi => @enumFromInt(@intFromEnum(reg) - reg.gpBase() + @intFromEnum(Register.eax)),
+            .segment => unreachable,
+            .x87, .mmx, .cr, .dr => reg,
+            .sse => reg.to128(),
+            .ip => .eip,
+        };
     }
 
     pub fn to16(reg: Register) Register {
-        return @enumFromInt(@intFromEnum(reg) - reg.gpBase() + @intFromEnum(Register.ax));
+        return switch (reg.class()) {
+            .general_purpose, .gphi => @enumFromInt(@intFromEnum(reg) - reg.gpBase() + @intFromEnum(Register.ax)),
+            .segment, .x87, .mmx, .cr, .dr => reg,
+            .sse => reg.to128(),
+            .ip => .ip,
+        };
     }
 
     pub fn to8(reg: Register) Register {
-        return switch (@intFromEnum(reg)) {
-            else => @enumFromInt(@intFromEnum(reg) - reg.gpBase() + @intFromEnum(Register.al)),
-            @intFromEnum(Register.ah)...@intFromEnum(Register.bh) => reg,
+        return switch (reg.class()) {
+            .general_purpose => reg.toLo8(),
+            .gphi, .segment, .x87, .mmx, .cr, .dr => reg,
+            .sse => reg.to128(),
+            .ip => .ip,
         };
     }
 
-    fn sseBase(reg: Register) u7 {
-        assert(reg.class() == .sse);
+    pub fn toLo8(reg: Register) Register {
+        return @enumFromInt(@intFromEnum(reg) - reg.gpBase() + @intFromEnum(Register.al));
+    }
+
+    pub fn toHi8(reg: Register) Register {
+        assert(reg.isClass(.gphi));
+        return @enumFromInt(@intFromEnum(reg) - reg.gpBase() + @intFromEnum(Register.ah));
+    }
+
+    pub fn to80(reg: Register) Register {
+        assert(reg.isClass(.x87));
+        return reg;
+    }
+
+    fn sseBase(reg: Register) u8 {
+        assert(reg.isClass(.sse));
         return switch (@intFromEnum(reg)) {
-            @intFromEnum(Register.ymm0)...@intFromEnum(Register.ymm15) => @intFromEnum(Register.ymm0),
-            @intFromEnum(Register.xmm0)...@intFromEnum(Register.xmm15) => @intFromEnum(Register.xmm0),
+            @intFromEnum(Register.zmm0)...@intFromEnum(Register.zmm31) => @intFromEnum(Register.zmm0),
+            @intFromEnum(Register.ymm0)...@intFromEnum(Register.ymm31) => @intFromEnum(Register.ymm0),
+            @intFromEnum(Register.xmm0)...@intFromEnum(Register.xmm31) => @intFromEnum(Register.xmm0),
             else => unreachable,
         };
+    }
+
+    pub fn to512(reg: Register) Register {
+        return @enumFromInt(@intFromEnum(reg) - reg.sseBase() + @intFromEnum(Register.zmm0));
     }
 
     pub fn to256(reg: Register) Register {
@@ -617,11 +699,13 @@ test "Register enc - different classes" {
 }
 
 test "Register classes" {
-    try expect(Register.r11.class() == .general_purpose);
-    try expect(Register.ymm11.class() == .sse);
-    try expect(Register.mm3.class() == .mmx);
-    try expect(Register.st3.class() == .x87);
-    try expect(Register.fs.class() == .segment);
+    try expect(Register.r11.isClass(.general_purpose));
+    try expect(Register.rdx.isClass(.gphi));
+    try expect(!Register.dil.isClass(.gphi));
+    try expect(Register.ymm11.isClass(.sse));
+    try expect(Register.mm3.isClass(.mmx));
+    try expect(Register.st3.isClass(.x87));
+    try expect(Register.fs.isClass(.segment));
 }
 
 pub const FrameIndex = enum(u32) {
@@ -678,15 +762,10 @@ pub const Memory = struct {
         frame: FrameIndex,
         table,
         reloc: u32,
+        pcrel: u32,
+        rip_inst: Mir.Inst.Index,
 
         pub const Tag = @typeInfo(Base).@"union".tag_type.?;
-
-        pub fn isExtended(self: Base) bool {
-            return switch (self) {
-                .none, .frame, .table, .reloc => false, // rsp, rbp, and rip are not extended
-                .reg => |reg| reg.isExtended(),
-            };
-        }
     };
 
     pub const Mod = union(enum(u1)) {
@@ -705,6 +784,8 @@ pub const Memory = struct {
         none,
         ptr,
         gpr,
+        low_byte,
+        high_byte,
         byte,
         word,
         dword,
@@ -750,7 +831,7 @@ pub const Memory = struct {
                     .x86 => 32,
                     .x86_64 => 64,
                 },
-                .byte => 8,
+                .low_byte, .high_byte, .byte => 8,
                 .word => 16,
                 .dword => 32,
                 .qword => 64,
